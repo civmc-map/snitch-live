@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en-US">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <!-- Use minimum-scale=1 to enable GPU rasterization -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=0, maximum-scale=1, minimum-scale=1">
+    <meta name="Description" content="Interactive map of CivClassics">
+    <title>CCMap Live Snitches Test</title>
+    <meta property="og:type" content="object" />
+    <meta property="og:url" content="https://ccmap.github.io/" />
+    <meta property="og:site_name" content="CCMap" />
+    <meta property="og:title" content="CCMap" />
+    <meta property="og:description" content="Interactive map of CivClassics" />
+    <meta property="og:image" content="http://civclassic.com/img/logo_patreon.png" />
+    <link rel="icon" type="image/png" href="http://civclassic.com/img/logo_patreon.png" />
+</head>
+
+<body>
+    <div id="app-root">
+        Loading...
+    </div>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.1.0/leaflet.css" />
+    <link rel="stylesheet" type="text/css" href="https://ccmap.github.io/beta/style.css" />
+    <script src="https://ccmap.github.io/beta/js/bundle.js"></script>
+    <script type="text/javascript">
+        var config = {
+            defaultCollectionUrls: [
+                { source: "https://ccmap.github.io/data/political.civmap.json", enabled_presentation: false },
+                { source: "https://ccmap.github.io/data/settlements.civmap.json", enabled_presentation: false },
+                { source: "https://ccmap.github.io/data/rails.civmap.json", enabled_presentation: false },
+            ],
+            initialState: {
+                mapConfig: {
+                    borderApothem: 13000,
+                    tilesRoot: 'http://ccmap.duckdns.org:44443/tiles_snitch_live/',
+                    basemaps: {
+                        terrain: { name: 'Terrain', id: 'terrain', bgColor: '#000' },
+                        biome: { name: 'Biome', id: 'biome', bgColor: '#000' },
+                        height: { name: 'Height', id: 'height', bgColor: '#888' },
+                        simple: { name: 'Land/Water', id: 'simple', bgColor: '#888' },
+                        simple_dark: { name: 'Land/Water dark', id: 'simple_dark', bgColor: '#000' },
+                        night: { name: 'Night', id: 'night', bgColor: '#000', isDefault: true },
+                        light: { name: 'Light', id: 'light', bgColor: '#000' },
+                    },
+                },
+            },
+        };
+        window.civMapApi = CivMap.start(config);
+
+        function createSnitchLiveCollection() {
+            return "civmap:collection/user"; // XXX doesn't work with current civmap version, needs implementation
+            var collectionId = "civmap:collection/snitch-live";
+            window.civMapApi.store.dispatch({
+                type: "CREATE_COLLECTION",
+                collectionId: "civmap:collection/snitch-live",
+                collection: {
+                    id: 'civmap:collection/snitch-live',
+                    name: 'Live Snitch alerts',
+                    persistent: false,
+                    presentations: {
+                        "Live Snitch Alerts": {
+                            "name": "Live Snitch Alerts",
+                            "base_style": {
+                                icon_size: 32,
+                                icon: '$image',
+                            }
+                        }
+                    },
+                }
+            });
+            return collectionId;
+        };
+
+        function handleSnitchAlert(alert) {
+            if (alert.snitch.location.world !== 'world') return; // wrong dimension
+            var timestr = (new Date(alert.time * 1000).toISOString()).substr(14, 8);
+            var collectionId = createSnitchLiveCollection();
+            window.civMapApi.store.dispatch({
+                type: "UPDATE_FEATURE_IN_COLLECTION",
+                collectionId: collectionId,
+                feature: {
+                    collectionId: collectionId,
+                    id: "civmap:feature/snitch-live/" + alert.player,
+                    name: alert.player,
+                    // label: `${alert.player} ${timestr}\nat ${alert.snitch.name}`,
+                    x: alert.snitch.location.x,
+                    z: alert.snitch.location.z,
+                    player: alert.player,
+                    snitch: alert.snitch.name,
+                    time: timestr,
+                    timestamp: alert.time,
+                    image: 'https://minotar.net/avatar/' + alert.player + '/256.png',
+                    icon: 'https://minotar.net/avatar/' + alert.player + '/32.png',
+                }
+            })
+        }
+
+        var currentWS;
+        function connectWS(token, url) {
+            if (!token) token = tokenElement.value;
+            if (!url) url = urlElement.value;
+
+            if (currentWS) currentWS.close();
+            console.log('Connecting to', url);
+            var ws = new WebSocket(url);
+            var currentWS = ws;
+
+            var retriesLeft = 3;
+            function retry() {
+                if (retriesLeft <= 0) {
+                    alert(`Snitch live connection failed three times. Disabling live snitch overlay. Reload page to re-enable.`);
+                    return;
+                }
+                retriesLeft -= 1;
+                connectWS(token, url);
+            }
+
+            ws.onopen = function (event) {
+                console.log('Socket open. Sending token:', token);
+                ws.send(JSON.stringify({
+                    "type": "auth",
+                    "apiToken": token,
+                    "applicationId": "ccmap-test",
+                    "apiVersion": 1,
+                }));
+                retriesLeft = 3;
+            };
+            ws.onerror = function (event) {
+                console.error('Socket error:', event);
+                retry();
+            };
+            ws.onclose = function (event) {
+                console.error('Socket closed:', event);
+                retry();
+            };
+            ws.onmessage = function onmessage(event) {
+                var payload;
+                try {
+                    payload = JSON.parse(event.data);
+                } catch (e) {
+                    console.error('Could not parse Kira API message:', event.data);
+                    return;
+                }
+                if (payload.type !== 'data') return; // unknown event
+                if (!payload['snitch-alerts']) return; // no snitches given
+                payload['snitch-alerts'].forEach(handleSnitchAlert);
+            };
+        }
+
+        var token = prompt("Enter Civclassic Kira Api Token to show live snitches:");
+        if (token) connectWS(token, 'wss://mc.civclassic.com:14314');
+        else alert('No token given. Disabling live snitch overlay.');
+    </script>
+</body>
+
+</html>
