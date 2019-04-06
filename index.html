@@ -74,9 +74,17 @@
             return collectionId;
         };
 
+        var latestPlayerUpdates = {}; // name -> timestamp
+
         function handleSnitchAlert(alert) {
             if (alert.snitch.location.world !== 'world') return; // wrong dimension
-            var timestr = (new Date(alert.time * 1000).toISOString()).substr(14, 8);
+
+            if (latestPlayerUpdates[alert.player] > alert.time) return; // old update
+            latestPlayerUpdates[alert.player] = alert.time;
+
+            console.log('Snitch alert for', alert.player);
+
+            var timestr = new Date(alert.time * 1000).toISOString().replace('T', ' ').substring(0, 19);
             var collectionId = createSnitchLiveCollection();
             window.civMapApi.store.dispatch({
                 type: "UPDATE_FEATURE_IN_COLLECTION",
@@ -85,7 +93,7 @@
                     collectionId: collectionId,
                     id: "civmap:feature/snitch-live/" + alert.player,
                     name: alert.player,
-                    // label: `${alert.player} ${timestr}\nat ${alert.snitch.name}`,
+                    // label: `${alert.player} ${timestr.substr(11)}\nat ${alert.snitch.name}`,
                     x: alert.snitch.location.x,
                     z: alert.snitch.location.z,
                     player: alert.player,
@@ -152,6 +160,7 @@
 
         // group, player, action, snitch, x, y, z
         var snitchRegexp = /`\[..:..:..\]` `\[([^ ]+)\]` \*\*([^ ]+)\*\* (is|logged in|logged out) at ([^ ]*) \(([-0-9]+),([-0-9]+),([-0-9]+)\)/;
+        var snitchChatLogRegexp = /\b([^ ]+) (entered|logged in to|logged out in) snitch at ([^ ]*) \[.+ ([-0-9]+) ([-0-9]+) ([-0-9]+)\]/;
 
         var currentDiscord;
         function connectDiscord(token, preloadChannels) {
@@ -185,7 +194,7 @@
                 var [_fullmatch, group, player, action, snitch, x, y, z] = match;
 
                 handleSnitchAlert({
-                    time: msg.createdTimestamp,
+                    time: msg.createdTimestamp / 1000,
                     player: player,
                     action: 'ENTRY', // TODO from action var
                     snitch: {
