@@ -24,6 +24,7 @@
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.1.0/leaflet.css" />
     <link rel="stylesheet" type="text/css" href="https://ccmap.github.io/beta/style.css" />
     <script src="https://ccmap.github.io/beta/js/bundle.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/discordjs/discord.js@webpack/discord.stable.min.js"></script>
     <script type="text/javascript">
         var config = {
             defaultCollectionUrls: [
@@ -110,7 +111,7 @@
             var retriesLeft = 3;
             function retry() {
                 if (retriesLeft <= 0) {
-                    alert(`Snitch live connection failed three times. Disabling live snitch overlay. Reload page to re-enable.`);
+                    alert(`Kira API connection failed three times. Disabling live snitch overlay. Reload page to re-enable.`);
                     return;
                 }
                 retriesLeft -= 1;
@@ -149,8 +150,93 @@
             };
         }
 
-        var token = prompt("Enter Civclassic Kira Api Token to show live snitches:");
-        if (token) connectWS(token, 'wss://mc.civclassic.com:14314');
+        // group, player, action, snitch, x, y, z
+        var snitchRegexp = /`\[..:..:..\]` `\[([^ ]+)\]` \*\*([^ ]+)\*\* (is|logged in|logged out) at ([^ ]*) \(([-0-9]+),([-0-9]+),([-0-9]+)\)/;
+
+        var currentDiscord;
+        function connectDiscord(token, preloadChannels) {
+            if (currentDiscord) currentDiscord.destroy();
+            console.log('Connecting to Discord');
+            const discord = new Discord.Client();
+            currentDiscord = discord;
+
+            if (!preloadChannels || !preloadChannels.forEach) {
+                preloadChannels = [533255321414795267]; // Kira bot id
+            }
+
+            var retriesLeft = 3;
+            function retry() {
+                if (retriesLeft <= 0) {
+                    alert(`Discord connection failed three times. Disabling live snitch overlay. Reload page to re-enable.`);
+                    return;
+                }
+                retriesLeft -= 1;
+                connectDiscord(token);
+            }
+
+            function handleMessageForSnitchAlert(msg) {
+                if (preloadChannels.length > 0
+                    && !preloadChannels.includes(msg.channel.id)
+                    && !preloadChannels.includes(msg.author.id)) return;
+
+                var match = snitchRegexp.exec(msg.content);
+                if (!match) return; // not a snitch alert
+
+                var [_fullmatch, group, player, action, snitch, x, y, z] = match;
+
+                handleSnitchAlert({
+                    time: msg.createdTimestamp,
+                    player: player,
+                    action: 'ENTRY', // TODO from action var
+                    snitch: {
+                        location: {
+                            x: parseInt(x),
+                            y: parseInt(y),
+                            z: parseInt(z),
+                            world: 'world',
+                        },
+                        name: snitch,
+                        group: group,
+                        type: null,
+                    },
+                });
+            }
+
+            discord.on('error', function (event) {
+                console.error('Discord error:', event);
+                retry();
+            });
+            discord.on('disconnect', function (event) {
+                console.error('Discord closed:', event);
+                retry();
+            });
+            discord.on('ready', function () {
+                console.log(`Connected to Discord as ${discord.user.tag}`);
+                retriesLeft = 3;
+
+                preloadChannels.forEach(function (channelId) {
+                    var channel = discord.channels.get(channelId);
+                    console.log('Loading last 100 msgs from', channel.name, 'in', channel.guild.name);
+                    channel.fetchMessages({ limit: 100 }).then(function (msgs) {
+                        msgs.forEach(handleMessageForSnitchAlert);
+                    }).catch(console.error);
+                });
+            });
+            discord.on('message', function (msg) {
+                handleMessageForSnitchAlert(msg);
+            });
+
+            discord.login(token);
+        }
+
+        // you can also add space-separated channel/user ids after the discord token to accept alerts only from those channels/users
+        var token = prompt("Enter Discord or Kira Token to show live snitches:");
+        if (token) {
+            var splits = token.split(' ');
+            token = splits[0];
+            if (token.length === 59) connectDiscord(token, splits.slice(1));
+            else connectWS(token, 'wss://mc.civclassic.com:14314');
+        }
         else alert('No token given. Disabling live snitch overlay.');
     </script>
 </body>
