@@ -51,25 +51,30 @@
         window.civMapApi = CivMap.start(config);
 
         function createSnitchLiveCollection() {
-            return "civmap:collection/user"; // XXX doesn't work with current civmap version, needs implementation
-            var collectionId = "civmap:collection/snitch-live";
+            var collectionId = 'civmap:collection/snitch-live';
+            try {
+                if (window.civMapApi.store.getState().collections[collectionId]) return collectionId;
+            } catch (e) {
+                // ignore missing collection
+            }
             window.civMapApi.store.dispatch({
                 type: "CREATE_COLLECTION",
-                collectionId: "civmap:collection/snitch-live",
+                collectionId: collectionId,
                 collection: {
-                    id: 'civmap:collection/snitch-live',
-                    name: 'Live Snitch alerts',
+                    id: collectionId,
+                    name: "Live Snitch alerts",
                     persistent: false,
+                    enabled_presentation: true,
                     presentations: {
-                        "Live Snitch Alerts": {
-                            "name": "Live Snitch Alerts",
-                            "base_style": {
-                                icon_size: 32,
-                                icon: '$image',
-                            }
-                        }
+                        "Live Snitch alerts": {
+                            name: "Live Snitch alerts",
+                            style_base: {
+                                icon_size: 24,
+                                icon: "$icon",
+                            },
+                        },
                     },
-                }
+                },
             });
             return collectionId;
         };
@@ -82,7 +87,7 @@
             if (latestPlayerUpdates[alert.player] > alert.time) return; // old update
             latestPlayerUpdates[alert.player] = alert.time;
 
-            console.log('Snitch alert for', alert.player);
+            console.log('Snitch alert:', alert.player, alert.action, alert.snitch.name, alert.snitch.location);
 
             var timestr = new Date(alert.time * 1000).toISOString().replace('T', ' ').substring(0, 19);
             var collectionId = createSnitchLiveCollection();
@@ -95,13 +100,14 @@
                     name: alert.player,
                     // label: `${alert.player} ${timestr.substr(11)}\nat ${alert.snitch.name}`,
                     x: alert.snitch.location.x,
+                    y: alert.snitch.location.y,
                     z: alert.snitch.location.z,
                     player: alert.player,
                     snitch: alert.snitch.name,
                     time: timestr,
                     timestamp: alert.time,
                     image: 'https://minotar.net/avatar/' + alert.player + '/256.png',
-                    icon: 'https://minotar.net/avatar/' + alert.player + '/32.png',
+                    icon: 'https://minotar.net/avatar/' + alert.player + '/48.png',
                 }
             })
         }
@@ -159,7 +165,8 @@
         }
 
         // group, player, action, snitch, x, y, z
-        var snitchRegexp = /`\[..:..:..\]` `\[([^ ]+)\]` \*\*([^ ]+)\*\* (is|logged in|logged out) at ([^ ]*) \(([-0-9]+),([-0-9]+),([-0-9]+)\)/;
+        var snitchKiraRegexp = /^`\[..:..:..\]` `\[([^ ]+)\]` \*\*([^ ]+)\*\* (is|logged in|logged out) at ([^ ]*) \(([-0-9]+),([-0-9]+),([-0-9]+)\)/;
+        // player, action, snitch, x, y, z
         var snitchChatLogRegexp = /\b([^ ]+) (entered|logged in to|logged out in) snitch at ([^ ]*) \[.+ ([-0-9]+) ([-0-9]+) ([-0-9]+)\]/;
 
         var currentDiscord;
@@ -188,7 +195,7 @@
                     && !preloadChannels.includes(msg.channel.id)
                     && !preloadChannels.includes(msg.author.id)) return;
 
-                var match = snitchRegexp.exec(msg.content);
+                var match = snitchKiraRegexp.exec(msg.content);
                 if (!match) return; // not a snitch alert
 
                 var [_fullmatch, group, player, action, snitch, x, y, z] = match;
