@@ -6,22 +6,22 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <!-- Use minimum-scale=1 to enable GPU rasterization -->
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=0, maximum-scale=1, minimum-scale=1">
-    <meta name="Description" content="Interactive map of CivClassics">
-    <title>CCMap Live Snitches Test</title>
+    <meta name="Description" content="CCMap Live Snitches">
+    <title>CCMap Live Snitches</title>
     <meta property="og:type" content="object" />
-    <meta property="og:url" content="https://ccmap.github.io/" />
+    <meta property="og:url" content="https://ccmap.github.io/snitch-live" />
     <meta property="og:site_name" content="CCMap" />
     <meta property="og:title" content="CCMap" />
-    <meta property="og:description" content="Interactive map of CivClassics" />
-    <meta property="og:image" content="http://civclassic.com/img/logo_patreon.png" />
-    <link rel="icon" type="image/png" href="http://civclassic.com/img/logo_patreon.png" />
+    <meta property="og:description" content="CCMap Live Snitches" />
+    <meta property="og:image" content="https://gamepedia.cursecdn.com/minecraft_gamepedia/9/9b/Note_Block.png" />
+    <link rel="icon" type="image/png" href="https://gamepedia.cursecdn.com/minecraft_gamepedia/9/9b/Note_Block.png" />
 </head>
 
 <body>
     <div id="app-root">
         Loading...
     </div>
-    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.1.0/leaflet.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.4.0/leaflet.css" />
     <link rel="stylesheet" type="text/css" href="https://ccmap.github.io/beta/style.css" />
     <script src="https://ccmap.github.io/beta/js/bundle.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/discordjs/discord.js@webpack/discord.stable.min.js"></script>
@@ -103,7 +103,10 @@
                     y: alert.snitch.location.y,
                     z: alert.snitch.location.z,
                     player: alert.player,
+                    action: alert.action,
                     snitch: alert.snitch.name,
+                    group: alert.snitch.group,
+                    type: alert.snitch.type,
                     time: timestr,
                     timestamp: alert.time,
                     image: 'https://minotar.net/avatar/' + alert.player + '/256.png',
@@ -113,12 +116,11 @@
         }
 
         var currentWS;
-        function connectWS(token, url) {
-            if (!token) token = tokenElement.value;
-            if (!url) url = urlElement.value;
+        function connectKira(token, groups) {
+            url = 'ws://mc.civclassic.com:14314/?apiVersion=1&applicationId=ccmap.github.io/snitch-live:v1&apiToken=' + encodeURIComponent(token);
 
             if (currentWS) currentWS.close();
-            console.log('Connecting to', url);
+            console.log('Connecting to Kira');
             var ws = new WebSocket(url);
             var currentWS = ws;
 
@@ -129,17 +131,11 @@
                     return;
                 }
                 retriesLeft -= 1;
-                connectWS(token, url);
+                connectKira(token, url);
             }
 
             ws.onopen = function (event) {
-                console.log('Socket open. Sending token:', token);
-                ws.send(JSON.stringify({
-                    "type": "auth",
-                    "apiToken": token,
-                    "applicationId": "ccmap-test",
-                    "apiVersion": 1,
-                }));
+                console.log('Connected to Kira.');
                 retriesLeft = 3;
             };
             ws.onerror = function (event) {
@@ -159,8 +155,15 @@
                     return;
                 }
                 if (payload.type !== 'data') return; // unknown event
-                if (!payload['snitch-alerts']) return; // no snitches given
-                payload['snitch-alerts'].forEach(handleSnitchAlert);
+                var alerts = payload['snitch-alerts'];
+                if (!alerts || !alerts.forEach) return; // no snitch alerts given, or wrong format
+                alerts.forEach(function (alert) {
+                    if (groups && groups.length > 0 && groups.includes
+                        && !groups.includes(alert.snitch.group)) {
+                        return;
+                    }
+                    handleSnitchAlert(alert);
+                });
             };
         }
 
@@ -245,13 +248,15 @@
             discord.login(token);
         }
 
-        // you can also add space-separated channel/user ids after the discord token to accept alerts only from those channels/users
-        var token = prompt("Enter Discord or Kira Token to show live snitches:");
+        // you can also add space-separated discord channel/user ids after the discord token to accept alerts only from those channels/users
+        // similarly, you can add space-separated namelayer group names after the kira token to accept alerts only from those groups
+        var token = prompt("Enter Kira API token or Discord token to show live snitches:");
         if (token) {
             var splits = token.split(' ');
             token = splits[0];
-            if (token.length === 59) connectDiscord(token, splits.slice(1));
-            else connectWS(token, 'wss://mc.civclassic.com:14314');
+            var filter = splits.slice(1);
+            if (token.length === 59) connectDiscord(token, filter);
+            else connectKira(token, filter);
         }
         else alert('No token given. Disabling live snitch overlay.');
     </script>
