@@ -41,7 +41,6 @@
                         biome: { name: 'Biome', id: 'biome', bgColor: '#000' },
                         height: { name: 'Height', id: 'height', bgColor: '#888' },
                         simple: { name: 'Land/Water', id: 'simple', bgColor: '#888' },
-                        simple_dark: { name: 'Land/Water dark', id: 'simple_dark', bgColor: '#000' },
                         night: { name: 'Night', id: 'night', bgColor: '#000', isDefault: true },
                         light: { name: 'Light', id: 'light', bgColor: '#000' },
                     },
@@ -89,7 +88,7 @@
 
             console.log('Snitch alert:', alert.player, alert.action, alert.snitch.name, alert.snitch.location);
 
-            var timestr = new Date(alert.time * 1000).toISOString().replace('T', ' ').substring(0, 19);
+            var timestr = new Date(alert.time).toISOString().replace('T', ' ').substring(0, 19);
             var collectionId = createSnitchLiveCollection();
             window.civMapApi.store.dispatch({
                 type: "UPDATE_FEATURE_IN_COLLECTION",
@@ -204,7 +203,7 @@
                 var [_fullmatch, group, player, action, snitch, x, y, z] = match;
 
                 handleSnitchAlert({
-                    time: msg.createdTimestamp / 1000,
+                    time: msg.createdTimestamp,
                     player: player,
                     action: 'ENTRY', // TODO from action var
                     snitch: {
