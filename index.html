@@ -117,7 +117,7 @@
 
         var currentWS;
         function connectKira(token, groups) {
-            url = 'ws://mc.civclassic.com:14314/?apiVersion=1&applicationId=ccmap.github.io/snitch-live:v1&apiToken=' + encodeURIComponent(token);
+            url = 'wss://mc.civclassic.com:14314/?apiVersion=1&applicationId=ccmap.github.io/snitch-live:v1&apiToken=' + encodeURIComponent(token);
 
             if (currentWS) currentWS.close();
             console.log('Connecting to Kira');
@@ -255,8 +255,8 @@
             var splits = token.split(' ');
             token = splits[0];
             var filter = splits.slice(1);
-            if (token.length === 59) connectDiscord(token, filter);
-            else connectKira(token, filter);
+            if (token.length === 64 && !token.includes('.')) connectKira(token, filter);
+            else connectDiscord(token, filter);
         }
         else alert('No token given. Disabling live snitch overlay.');
     </script>
