@@ -249,7 +249,8 @@
 
         // you can also add space-separated discord channel/user ids after the discord token to accept alerts only from those channels/users
         // similarly, you can add space-separated namelayer group names after the kira token to accept alerts only from those groups
-        var token = prompt("Enter Kira API token or Discord token to show live snitches:");
+        var token = window.location.hash ? decodeURI(window.location.hash.substr(1)) : 
+                prompt("Enter Kira API token or Discord token to show live snitches:");
         if (token) {
             var splits = token.split(' ');
             token = splits[0];
