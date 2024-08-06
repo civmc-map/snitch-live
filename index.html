@@ -6,13 +6,13 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <!-- Use minimum-scale=1 to enable GPU rasterization -->
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=0, maximum-scale=1, minimum-scale=1">
-    <meta name="Description" content="CCMap Live Snitches">
-    <title>CCMap Live Snitches</title>
+    <meta name="Description" content="CivMCMap Live Snitches">
+    <title>Live Snitches - CivMCMap</title>
     <meta property="og:type" content="object" />
-    <meta property="og:url" content="https://ccmap.github.io/snitch-live" />
-    <meta property="og:site_name" content="CCMap" />
-    <meta property="og:title" content="CCMap" />
-    <meta property="og:description" content="CCMap Live Snitches" />
+    <meta property="og:url" content="https://civmc-map.github.io/snitch-live" />
+    <meta property="og:site_name" content="CivMCMap" />
+    <meta property="og:title" content="CivMCMap" />
+    <meta property="og:description" content="CivMCMap Live Snitches" />
     <meta property="og:image" content="https://gamepedia.cursecdn.com/minecraft_gamepedia/9/9b/Note_Block.png" />
     <link rel="icon" type="image/png" href="https://gamepedia.cursecdn.com/minecraft_gamepedia/9/9b/Note_Block.png" />
 </head>
@@ -23,26 +23,26 @@
     </div>
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.4.0/leaflet.css" />
     <link rel="stylesheet" type="text/css" href="https://ccmap.github.io/beta/style.css" />
-    <script src="https://ccmap.github.io/beta/js/bundle.js"></script>
+    <script src="https://ccmap.github.io/js/bundle.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/discordjs/discord.js@webpack/discord.stable.min.js"></script>
     <script type="text/javascript">
         var config = {
             defaultCollectionUrls: [
-                { source: "https://ccmap.github.io/data/political.civmap.json", enabled_presentation: false },
-                { source: "https://ccmap.github.io/data/settlements.civmap.json", enabled_presentation: false },
-                { source: "https://ccmap.github.io/data/rails.civmap.json", enabled_presentation: false },
+                { source: "territories-thejmqn.json", enabled_presentation: false },
+                { source: "portals.json", enabled_presentation: false },
+                { source: "https://raw.githubusercontent.com/OneDest/data/master/civmap.json", enabled_presentation: false },
+                { source: "https://raw.githubusercontent.com/VilyanZ/Civmc-Railmap/main/Rail%20Map%20(VilyanZ).json", enabled_presentation: false },
+                { source: "https://raw.githubusercontent.com/Thejmqn/CivMCSettlements/main/CivMCSettlements.json", enabled_presentation: false },
             ],
             initialState: {
                 mapConfig: {
-                    borderApothem: 13000,
-                    tilesRoot: 'https://raw.githubusercontent.com/ccmap/tiles/master/',
+                    borderApothem: 10000,
+                    tilesRoot: 'https://civmc-map.duckdns.org/tiles/',
                     basemaps: {
-                        terrain: { name: 'Terrain', id: 'terrain', bgColor: '#000' },
-                        biome: { name: 'Biome', id: 'biome', bgColor: '#000' },
-                        height: { name: 'Height', id: 'height', bgColor: '#888' },
-                        simple: { name: 'Land/Water', id: 'simple', bgColor: '#888' },
-                        night: { name: 'Night', id: 'night', bgColor: '#000', isDefault: true },
-                        light: { name: 'Light', id: 'light', bgColor: '#000' },
+                        terrain: { name: 'Terrain (Bronnakus)', id: 'terrain', bgColor: '#000', isDefault: true },
+                        night: { name: 'Start of the World (Fier)', id: 'sotw', bgColor: '#000' },
+                        biome: { name: 'Biome (Paddington)', id: 'biome', bgColor: '#888' },
+                        height: { name: 'Topographic (Padington)', id: 'topo', bgColor: '#888' },
                     },
                 },
             },
@@ -114,60 +114,8 @@
             })
         }
 
-        var currentWS;
-        function connectKira(token, groups) {
-            url = 'wss://mc.civclassic.com:14314/?apiVersion=1&applicationId=ccmap.github.io/snitch-live:v1&apiToken=' + encodeURIComponent(token);
-
-            if (currentWS) currentWS.close();
-            console.log('Connecting to Kira');
-            var ws = new WebSocket(url);
-            var currentWS = ws;
-
-            var retriesLeft = 3;
-            function retry() {
-                if (retriesLeft <= 0) {
-                    alert(`Kira API connection failed three times. Disabling live snitch overlay. Reload page to re-enable.`);
-                    return;
-                }
-                retriesLeft -= 1;
-                connectKira(token, url);
-            }
-
-            ws.onopen = function (event) {
-                console.log('Connected to Kira.');
-                retriesLeft = 3;
-            };
-            ws.onerror = function (event) {
-                console.error('Socket error:', event);
-                retry();
-            };
-            ws.onclose = function (event) {
-                console.error('Socket closed:', event);
-                retry();
-            };
-            ws.onmessage = function onmessage(event) {
-                var payload;
-                try {
-                    payload = JSON.parse(event.data);
-                } catch (e) {
-                    console.error('Could not parse Kira API message:', event.data);
-                    return;
-                }
-                if (payload.type !== 'data') return; // unknown event
-                var alerts = payload['snitch-alerts'];
-                if (!alerts || !alerts.forEach) return; // no snitch alerts given, or wrong format
-                alerts.forEach(function (alert) {
-                    if (groups && groups.length > 0 && groups.includes
-                        && !groups.includes(alert.snitch.group)) {
-                        return;
-                    }
-                    handleSnitchAlert(alert);
-                });
-            };
-        }
-
         // group, player, action, snitch, x, y, z
-        var snitchKiraRegexp = /^`\[..:..:..\]` `\[([^ ]+)\]` \*\*([^ ]+)\*\* (is|logged in|logged out) at ([^ ]*) \(([-0-9]+),([-0-9]+),([-0-9]+)\)/;
+        var snitchKiraRegexp = /^`\[?(?:(?<ymd>[-0-9]{10})[ T])?(?<hms>[:0-9]{8})\]?` +`\[(?<group>\S+)\]` +\*\*`?(?<player>[A-Za-z0-9_]{2,17})`?\*\* +(?:logged )?(?<action>at|is|in|out) +(?:at +)?`?(?<snitch>.*?\S *?)?`? *[([](?:(?<world>\S+)[, ]+)?(?<x>[-0-9.]+)[, ]+(?<y>[-0-9.]+)[, ]+(?<z>[-0-9.]+)[)\]].*/;
         // player, action, snitch, x, y, z
         var snitchChatLogRegexp = /\b([^ ]+) (entered|logged in to|logged out in) snitch at ([^ ]*) \[.+ ([-0-9]+) ([-0-9]+) ([-0-9]+)\]/;
 
@@ -179,7 +127,7 @@
             currentDiscord = discord;
 
             if (!preloadChannels || !preloadChannels.forEach) {
-                preloadChannels = [533255321414795267]; // Kira bot id
+                preloadChannels = [952325487663939645]; // Kira bot id
             }
 
             var retriesLeft = 3;
@@ -199,8 +147,9 @@
 
                 var match = snitchKiraRegexp.exec(msg.content);
                 if (!match) return; // not a snitch alert
+                var {group, player, action, snitch, world, x, y, z} = match.groups;
 
-                var [_fullmatch, group, player, action, snitch, x, y, z] = match;
+                retriesLeft = 3;
 
                 handleSnitchAlert({
                     time: msg.createdTimestamp,
@@ -211,7 +160,7 @@
                             x: parseInt(x),
                             y: parseInt(y),
                             z: parseInt(z),
-                            world: 'world',
+                            world: world || 'world',
                         },
                         name: snitch,
                         group: group,
@@ -234,6 +183,7 @@
 
                 preloadChannels.forEach(function (channelId) {
                     var channel = discord.channels.get(channelId);
+                    if (!channel) return console.log('Skipping unknown channel', channelId);
                     console.log('Loading last 100 msgs from', channel.name, 'in', channel.guild.name);
                     channel.fetchMessages({ limit: 100 }).then(function (msgs) {
                         msgs.forEach(handleMessageForSnitchAlert);
@@ -250,13 +200,12 @@
         // you can also add space-separated discord channel/user ids after the discord token to accept alerts only from those channels/users
         // similarly, you can add space-separated namelayer group names after the kira token to accept alerts only from those groups
         var token = window.location.hash ? decodeURI(window.location.hash.substr(1)) : 
-                prompt("Enter Kira API token or Discord token to show live snitches:");
+                prompt("Enter Discord bot token to show live snitches:");
         if (token) {
-            var splits = token.split(' ');
+            var splits = token.split(/[,; ]/);
             token = splits[0];
             var filter = splits.slice(1);
-            if (token.length === 64 && !token.includes('.')) connectKira(token, filter);
-            else connectDiscord(token, filter);
+            connectDiscord(token, filter);
         }
         else alert('No token given. Disabling live snitch overlay.');
     </script>
